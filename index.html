@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Saturador de audio — probar, escuchar y guardar</title>
+  <style>
+    :root{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:#0f1724;color:#e6eef8}
+    body{margin:0;padding:24px;display:grid;gap:16px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    h1{margin:0 0 8px;font-size:20px}
+    label{display:block;margin:8px 0;font-size:13px}
+    input[type=file]{display:block}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .slider{width:320px}
+    button, a.button{background:#2563eb;color:white;padding:8px 12px;border-radius:8px;border:none;cursor:pointer;text-decoration:none}
+    button.secondary{background:#334155}
+    .small{font-size:13px;color:#a8b3c7}
+    .controls{display:flex;gap:8px;align-items:center}
+    audio{width:100%;margin-top:8px}
+    .status{font-size:13px;color:#9fb3db}
+    .preset{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:6px 8px;border-radius:8px;color:#dbeafe;cursor:pointer}
+    footer{font-size:12px;color:#8b9abf}
+    @media (max-width:520px){.slider{width:160px}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Saturador de audio</h1>
+    <p class="small">Carga un archivo de audio (wav, mp3), ajusta el nivel de saturación, escucha el resultado y descárgalo.</p>
+
+    <label>1) Selecciona un archivo de audio (o arrastra y suelta)</label>
+    <input id="file" type="file" accept="audio/*" />
+    <div id="drop" class="small">También puedes arrastrar un archivo aquí.</div>
+
+    <div style="height:8px"></div>
+
+    <div class="row">
+      <div>
+        <label>2) Nivel de saturación: <strong id="levelLabel">0</strong></label>
+        <input id="level" class="slider" type="range" min="0" max="100" value="0" />
+      </div>
+      <div class="controls">
+        <button id="presetLight" class="preset">Ligera</button>
+        <button id="presetMed" class="preset">Media</button>
+        <button id="presetHard" class="preset">Fuerte</button>
+      </div>
+    </div>
+
+    <div style="height:10px"></div>
+
+    <div class="row">
+      <div>
+        <label>3) Reproducir</label>
+        <div class="small">Original:</div>
+        <audio id="origPlayer" controls></audio>
+        <div class="small" style="margin-top:6px">Procesado:</div>
+        <audio id="processedPlayer" controls></audio>
+      </div>
+
+      <div style="min-width:220px">
+        <label>4) Acciones</label>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button id="apply" class="button">Aplicar saturación y generar</button>
+          <a id="downloadLink" class="button" style="display:none" download="audio_saturado.wav">Descargar WAV</a>
+          <button id="playProcessed" class="button secondary">Reproducir procesado</button>
+        </div>
+        <div style="height:8px"></div>
+        <div class="status" id="status">Esperando archivo...</div>
+      </div>
+    </div>
+
+    <div style="height:8px"></div>
+    <div class="small">Consejo: aumenta poco a poco el nivel hasta encontrar el punto deseado. Niveles altos producen distorsión agresiva.</div>
+  </div>
+
+  <footer class="small">Hecho con Web Audio API — exporta a WAV.</footer>
+
+  <script>
+    // Elementos
+    const fileInput = document.getElementById('file');
+    const drop = document.getElementById('drop');
+    const level = document.getElementById('level');
+    const levelLabel = document.getElementById('levelLabel');
+    const origPlayer = document.getElementById('origPlayer');
+    const processedPlayer = document.getElementById('processedPlayer');
+    const applyBtn = document.getElementById('apply');
+    const downloadLink = document.getElementById('downloadLink');
+    const playProcessedBtn = document.getElementById('playProcessed');
+    const status = document.getElementById('status');
+
+    let audioBuffer = null;
+    let processedBlobUrl = null;
+    let audioFile = null;
+
+    // Helpers: drag & drop
+    ['dragenter','dragover'].forEach(e => document.addEventListener(e, ev => {ev.preventDefault(); ev.dataTransfer && (ev.dataTransfer.dropEffect = 'copy')}));
+    document.addEventListener('drop', ev => {
+      ev.preventDefault();
+      const f = ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (f) {
+        fileInput.files = ev.dataTransfer.files; // set input
+        handleFile(f);
+      }
+    });
+
+    fileInput.addEventListener('change', ev => {
+      const f = ev.target.files[0];
+      if (f) handleFile(f);
+    });
+
+    function setStatus(t){ status.textContent = t }
+
+    async function handleFile(file){
+      audioFile = file;
+      setStatus('Cargando archivo...');
+      // muestra original en player (simple)
+      try{
+        const url = URL.createObjectURL(file);
+        origPlayer.src = url;
+        origPlayer.load();
+      }catch(e){console.error(e)}
+
+      const arrayBuffer = await file.arrayBuffer();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx.decodeAudioData(arrayBuffer).then(buffer => {
+        audioBuffer = buffer;
+        setStatus('Archivo cargado. Duración: ' + Math.round(buffer.duration*10)/10 + ' s');
+      }).catch(err => {
+        console.error(err); setStatus('Error al decodificar el audio.');
+      });
+    }
+
+    // Slider & presets
+    level.addEventListener('input', ()=>{
+      levelLabel.textContent = level.value;
+    });
+    document.getElementById('presetLight').addEventListener('click', ()=>{ level.value = 20; levelLabel.textContent = level.value; });
+    document.getElementById('presetMed').addEventListener('click', ()=>{ level.value = 50; levelLabel.textContent = level.value; });
+    document.getElementById('presetHard').addEventListener('click', ()=>{ level.value = 85; levelLabel.textContent = level.value; });
+
+    // Crear curva de distorsión (waveshaper)
+    function makeDistortionCurve(amount) {
+      // amount: 0..100 (0 = none, 100 = mucha distorsión)
+      const k = amount * 10; // refinar
+      const n_samples = 44100;
+      const curve = new Float32Array(n_samples);
+      const deg = Math.PI / 180;
+      for (let i = 0; i < n_samples; ++i) {
+        const x = i * 2 / n_samples - 1;
+        curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+      }
+      return curve;
+    }
+
+    // Convierte AudioBuffer a WAV (16-bit PCM)
+    function audioBufferToWav(buffer, opt) {
+      opt = opt || {}
+      const numChannels = buffer.numberOfChannels
+      const sampleRate = buffer.sampleRate
+      const format = 1 // PCM
+      const bitDepth = 16
+
+      let result;
+      if (numChannels === 2) {
+        const channelLeft = buffer.getChannelData(0)
+        const channelRight = buffer.getChannelData(1)
+        result = interleave(channelLeft, channelRight)
+      } else {
+        result = buffer.getChannelData(0)
+      }
+
+      const bytesPerSample = bitDepth / 8
+      const blockAlign = numChannels * bytesPerSample
+
+      const bufferLength = result.length * bytesPerSample
+      const wavBuffer = new ArrayBuffer(44 + bufferLength)
+      const view = new DataView(wavBuffer)
+
+      /* RIFF identifier */ writeString(view, 0, 'RIFF')
+      /* file length */ view.setUint32(4, 36 + bufferLength, true)
+      /* RIFF type */ writeString(view, 8, 'WAVE')
+      /* format chunk identifier */ writeString(view, 12, 'fmt ')
+      /* format chunk length */ view.setUint32(16, 16, true)
+      /* sample format (raw) */ view.setUint16(20, format, true)
+      /* channel count */ view.setUint16(22, numChannels, true)
+      /* sample rate */ view.setUint32(24, sampleRate, true)
+      /* byte rate (sampleRate * blockAlign) */ view.setUint32(28, sampleRate * blockAlign, true)
+      /* block align (channel count * bytes per sample) */ view.setUint16(32, blockAlign, true)
+      /* bits per sample */ view.setUint16(34, bitDepth, true)
+      /* data chunk identifier */ writeString(view, 36, 'data')
+      /* data chunk length */ view.setUint32(40, bufferLength, true)
+
+      // write PCM samples
+      floatTo16BitPCM(view, 44, result)
+
+      return new Blob([view], { type: 'audio/wav' })
+
+      function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i))
+        }
+      }
+
+      function interleave(left, right) {
+        const length = left.length + right.length
+        const result = new Float32Array(length)
+        let inputIndex = 0
+        for (let index = 0; index < left.length; index++) {
+          result[inputIndex++] = left[index]
+          result[inputIndex++] = right[index]
+        }
+        return result
+      }
+
+      function floatTo16BitPCM(output, offset, input) {
+        for (let i = 0; i < input.length; i++, offset += 2) {
+          let s = Math.max(-1, Math.min(1, input[i]))
+          s = s < 0 ? s * 0x8000 : s * 0x7FFF
+          output.setInt16(offset, s, true)
+        }
+      }
+    }
+
+    // Aplicar saturación y exportar
+    applyBtn.addEventListener('click', async ()=>{
+      if (!audioBuffer){ setStatus('Primero carga un archivo de audio.'); return }
+      const amt = parseInt(level.value,10);
+      setStatus('Procesando audio (saturación ' + amt + ')...');
+      applyBtn.disabled = true;
+
+      try{
+        const renderedBuffer = await renderWithWaveshaper(audioBuffer, amt);
+        const wavBlob = audioBufferToWav(renderedBuffer);
+        if (processedBlobUrl) URL.revokeObjectURL(processedBlobUrl);
+        processedBlobUrl = URL.createObjectURL(wavBlob);
+        processedPlayer.src = processedBlobUrl;
+        processedPlayer.load();
+        downloadLink.href = processedBlobUrl;
+        downloadLink.style.display = 'inline-block';
+        setStatus('Procesado listo — puedes reproducir o descargar.');
+      }catch(e){ console.error(e); setStatus('Error al procesar audio.'); }
+
+      applyBtn.disabled = false;
+    });
+
+    playProcessedBtn.addEventListener('click', ()=>{
+      if (!processedPlayer.src) { setStatus('No hay audio procesado.'); return }
+      processedPlayer.play();
+    });
+
+    async function renderWithWaveshaper(inputBuffer, amount){
+      const channels = inputBuffer.numberOfChannels;
+      const sampleRate = inputBuffer.sampleRate;
+      const length = inputBuffer.length;
+      // Offline context to render result deterministically
+      const offlineCtx = new OfflineAudioContext(channels, length, sampleRate);
+      const source = offlineCtx.createBufferSource();
+      source.buffer = inputBuffer;
+
+      const waveshaper = offlineCtx.createWaveShaper();
+      waveshaper.curve = makeDistortionCurve(amount);
+      waveshaper.oversample = '4x';
+
+      // Optional: add a subtle pre-gain and post-gain to control effect
+      const preGain = offlineCtx.createGain();
+      const postGain = offlineCtx.createGain();
+
+      // Scale pre-gain with amount so that higher saturation also drives more
+      preGain.gain.value = 1 + (amount / 50);
+      postGain.gain.value = 1;
+
+      source.connect(preGain);
+      preGain.connect(waveshaper);
+      waveshaper.connect(postGain);
+      postGain.connect(offlineCtx.destination);
+
+      source.start(0);
+      const rendered = await offlineCtx.startRendering();
+      return rendered;
+    }
+
+    // Utility: auto-load a tiny sample if no file selected (optional)
+    // You can remove this if you don't want a default audio.
+    (async ()=>{
+      // noop for now; leave empty to wait for user file
+    })();
+
+  </script>
+</body>
+</html>
