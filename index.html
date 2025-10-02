@@ -26,7 +26,7 @@
 </head>
 <body>
   <div class="card">
-    <h1>Saturador de audio</h1>
+    <h1>Saturaudio</h1>
     <p class="small">Carga un archivo de audio (wav, mp3), ajusta el nivel de saturación, escucha el resultado y descárgalo.</p>
 
     <label>1) Selecciona un archivo de audio (o arrastra y suelta)</label>
@@ -37,7 +37,7 @@
 
     <div class="row">
       <div>
-        <label>2) Nivel de saturación: <strong id="levelLabel">0</strong></label>
+        <label>2) Nivel de saturación o de la fiesta xD: <strong id="levelLabel">0</strong></label>
         <input id="level" class="slider" type="range" min="0" max="100" value="0" />
       </div>
       <div class="controls">
@@ -74,7 +74,7 @@
     <div class="small">Consejo: aumenta poco a poco el nivel hasta encontrar el punto deseado. Niveles altos producen distorsión agresiva.</div>
   </div>
 
-  <footer class="small">Hecho con Web Audio API — exporta a WAV.</footer>
+  <footer class="small">Hecho con Web Audio API — hecho por joshuaPRO5 y sus webadas randoms </footer>
 
   <script>
     // Elementos
@@ -238,7 +238,7 @@
         processedPlayer.load();
         downloadLink.href = processedBlobUrl;
         downloadLink.style.display = 'inline-block';
-        setStatus('Procesado listo — puedes reproducir o descargar.');
+        setStatus('Procesado listo — puedes reproducir o descargar. no lo reproduzcas en tus audifonos ☠');
       }catch(e){ console.error(e); setStatus('Error al procesar audio.'); }
 
       applyBtn.disabled = false;
