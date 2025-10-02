@@ -17,17 +17,31 @@
     button.secondary{background:#334155}
     .small{font-size:13px;color:#a8b3c7}
     .controls{display:flex;gap:8px;align-items:center}
-    audio{width:100%;margin-top:8px}
+    audio{display:none} /* ocultamos controles nativos */
     .status{font-size:13px;color:#9fb3db}
     .preset{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:6px 8px;border-radius:8px;color:#dbeafe;cursor:pointer}
     footer{font-size:12px;color:#8b9abf}
-    @media (max-width:520px){.slider{width:160px}}
+
+    /* Estilos del reproductor personalizado (inspirado en reproductores modernos) */
+    .player{display:flex;gap:12px;align-items:center;padding:8px;border-radius:10px;background:linear-gradient(90deg,rgba(255,255,255,0.015),transparent);border:1px solid rgba(255,255,255,0.03)}
+    .playbtn{width:44px;height:44px;border-radius:10px;border:none;background:linear-gradient(180deg,#2563eb,#1e40af);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;cursor:pointer}
+    .playbtn.paused{background:transparent;border:1px solid rgba(255,255,255,0.06);color:#dbeafe}
+    .progress{flex:1;height:10px;background:rgba(255,255,255,0.04);border-radius:999px;position:relative;cursor:pointer}
+    .progress-filled{position:absolute;left:0;top:0;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#60a5fa,#3b82f6)}
+    .time{min-width:90px;text-align:right;font-size:13px;color:#9fb3db}
+    .volume{width:120px}
+
+    @media (max-width:720px){
+      .slider{width:160px}
+      .volume{width:80px}
+      .time{min-width:64px;font-size:12px}
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Saturaudio</h1>
-    <p class="small">Carga un archivo de audio (wav, mp3), ajusta el nivel de saturación, escucha el resultado y descárgalo.</p>
+    <p class="small">Carga un archivo de audio (wav, mp3), ajusta el nivel de saturación, escucha el resultado y descárgalo (WAV o MP3). no me hago responsable de que tus bocinas e oidos estallen XD</p>
 
     <label>1) Selecciona un archivo de audio (o arrastra y suelta)</label>
     <input id="file" type="file" accept="audio/*" />
@@ -37,7 +51,7 @@
 
     <div class="row">
       <div>
-        <label>2) Nivel de saturación o de la fiesta xD: <strong id="levelLabel">0</strong></label>
+        <label>2) Nivel de saturación o de fiesta xD: <strong id="levelLabel">0</strong></label>
         <input id="level" class="slider" type="range" min="0" max="100" value="0" />
       </div>
       <div class="controls">
@@ -50,20 +64,36 @@
     <div style="height:10px"></div>
 
     <div class="row">
-      <div>
+      <div style="flex:1 1 60%">
         <label>3) Reproducir</label>
+
         <div class="small">Original:</div>
-        <audio id="origPlayer" controls></audio>
-        <div class="small" style="margin-top:6px">Procesado:</div>
-        <audio id="processedPlayer" controls></audio>
+        <audio id="origPlayer"></audio>
+        <div class="player" id="origUI">
+          <button class="playbtn" data-target="orig" title="Reproducir/Pausar">▶</button>
+          <div class="progress" data-target="orig"><div class="progress-filled"></div></div>
+          <div class="time"><span class="current">0:00</span> / <span class="duration">0:00</span></div>
+          <input type="range" class="volume" data-target="orig" min="0" max="1" step="0.01" value="1" title="Volumen">
+        </div>
+
+        <div class="small" style="margin-top:12px">con el party saturado xDD:</div>
+        <audio id="processedPlayer"></audio>
+        <div class="player" id="processedUI">
+          <button class="playbtn" data-target="processed" title="Reproducir/Pausar">▶</button>
+          <div class="progress" data-target="processed"><div class="progress-filled"></div></div>
+          <div class="time"><span class="current">0:00</span> / <span class="duration">0:00</span></div>
+          <input type="range" class="volume" data-target="processed" min="0" max="1" step="0.01" value="1" title="Volumen">
+        </div>
       </div>
 
-      <div style="min-width:220px">
+      <div style="min-width:240px">
         <label>4) Acciones</label>
         <div style="display:flex;flex-direction:column;gap:8px">
-          <button id="apply" class="button">Aplicar saturación y generar</button>
+          <button id="apply" class="button">Aplicar saturación QUE SE ARME XD</button>
           <a id="downloadLink" class="button" style="display:none" download="audio_saturado.wav">Descargar WAV</a>
-          <button id="playProcessed" class="button secondary">Reproducir procesado</button>
+          <button id="convertMp3" class="button">Convertir a MP3</button>
+          <a id="downloadMp3" class="button" style="display:none" download="audio_saturado.mp3">Descargar MP3</a>
+          <button id="playProcessed" class="button secondary">Reproducir procesado (atajo)</button>
         </div>
         <div style="height:8px"></div>
         <div class="status" id="status">Esperando archivo...</div>
@@ -74,7 +104,10 @@
     <div class="small">Consejo: aumenta poco a poco el nivel hasta encontrar el punto deseado. Niveles altos producen distorsión agresiva.</div>
   </div>
 
-  <footer class="small">Hecho con Web Audio API — hecho por joshuaPRO5 y sus webadas randoms </footer>
+  <footer class="small">Hecho con Web Audio API — exporta a WAV y MP3 (usando lamejs). - hecho por joshuaPRO5 y sus webadas</footer>
+
+  <!-- LameJS para codificar MP3 en el navegador -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.0/lame.min.js"></script>
 
   <script>
     // Elementos
@@ -88,9 +121,12 @@
     const downloadLink = document.getElementById('downloadLink');
     const playProcessedBtn = document.getElementById('playProcessed');
     const status = document.getElementById('status');
+    const convertMp3Btn = document.getElementById('convertMp3');
+    const downloadMp3 = document.getElementById('downloadMp3');
 
     let audioBuffer = null;
     let processedBlobUrl = null;
+    let mp3BlobUrl = null;
     let audioFile = null;
 
     // Helpers: drag & drop
@@ -132,17 +168,14 @@
     }
 
     // Slider & presets
-    level.addEventListener('input', ()=>{
-      levelLabel.textContent = level.value;
-    });
+    level.addEventListener('input', ()=>{ levelLabel.textContent = level.value; });
     document.getElementById('presetLight').addEventListener('click', ()=>{ level.value = 20; levelLabel.textContent = level.value; });
     document.getElementById('presetMed').addEventListener('click', ()=>{ level.value = 50; levelLabel.textContent = level.value; });
     document.getElementById('presetHard').addEventListener('click', ()=>{ level.value = 85; levelLabel.textContent = level.value; });
 
     // Crear curva de distorsión (waveshaper)
     function makeDistortionCurve(amount) {
-      // amount: 0..100 (0 = none, 100 = mucha distorsión)
-      const k = amount * 10; // refinar
+      const k = amount * 10;
       const n_samples = 44100;
       const curve = new Float32Array(n_samples);
       const deg = Math.PI / 180;
@@ -238,7 +271,11 @@
         processedPlayer.load();
         downloadLink.href = processedBlobUrl;
         downloadLink.style.display = 'inline-block';
-        setStatus('Procesado listo — puedes reproducir o descargar. no lo reproduzcas en tus audifonos ☠');
+        // hide previous mp3
+        if (mp3BlobUrl) { URL.revokeObjectURL(mp3BlobUrl); mp3BlobUrl = null; downloadMp3.style.display = 'none'; }
+        // store last rendered buffer for MP3 conversion
+        window._lastRenderedBuffer = renderedBuffer;
+        setStatus('Procesado listo — puedes reproducir o descargar no pongas esto en tus audifonos ☠.');
       }catch(e){ console.error(e); setStatus('Error al procesar audio.'); }
 
       applyBtn.disabled = false;
@@ -246,14 +283,90 @@
 
     playProcessedBtn.addEventListener('click', ()=>{
       if (!processedPlayer.src) { setStatus('No hay audio procesado.'); return }
-      processedPlayer.play();
+      // play using custom UI
+      const uiPlay = document.querySelector('#processedUI .playbtn');
+      uiPlay.click();
     });
+
+    // Reemplazamos controles nativos por UI personalizada (sin quitar la funcionalidad)
+    function formatTime(sec){
+      if (!isFinite(sec)) return '0:00';
+      const s = Math.floor(sec % 60).toString().padStart(2,'0');
+      const m = Math.floor(sec / 60);
+      return m + ':' + s;
+    }
+
+    function bindCustomPlayer(audioEl, rootId){
+      const root = document.getElementById(rootId);
+      if (!root) return;
+      const btn = root.querySelector('.playbtn');
+      const progress = root.querySelector('.progress');
+      const progressFill = root.querySelector('.progress-filled');
+      const currentTimeEl = root.querySelector('.current');
+      const durationEl = root.querySelector('.duration');
+      const volumeEl = root.querySelector('.volume');
+
+      // Play / pause
+      btn.addEventListener('click', ()=>{
+        if (audioEl.paused){ audioEl.play(); btn.textContent = '❚❚'; btn.classList.remove('paused'); }
+        else { audioEl.pause(); btn.textContent = '▶'; btn.classList.add('paused'); }
+      });
+
+      // Update progress as audio plays
+      audioEl.addEventListener('timeupdate', ()=>{
+        if (!audioEl.duration) return;
+        const pct = (audioEl.currentTime / audioEl.duration) * 100;
+        progressFill.style.width = pct + '%';
+        currentTimeEl.textContent = formatTime(audioEl.currentTime);
+      });
+
+      // Update duration when metadata loaded
+      audioEl.addEventListener('loadedmetadata', ()=>{
+        durationEl.textContent = formatTime(audioEl.duration);
+      });
+
+      // Seek on click
+      progress.addEventListener('click', (e)=>{
+        const rect = progress.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const pct = Math.max(0, Math.min(1, x / rect.width));
+        if (audioEl.duration) audioEl.currentTime = pct * audioEl.duration;
+      });
+
+      // Volume control
+      volumeEl.addEventListener('input', ()=>{ audioEl.volume = parseFloat(volumeEl.value); });
+
+      // Reset UI on ended
+      audioEl.addEventListener('ended', ()=>{ btn.textContent = '▶'; btn.classList.add('paused'); progressFill.style.width = '0%'; currentTimeEl.textContent = '0:00'; });
+
+      // Keep UI state if audio is played programmatically
+      audioEl.addEventListener('play', ()=>{ btn.textContent = '❚❚'; btn.classList.remove('paused'); });
+      audioEl.addEventListener('pause', ()=>{ btn.textContent = '▶'; btn.classList.add('paused'); });
+    }
+
+    // Bind both players after DOM ready
+    document.addEventListener('DOMContentLoaded', ()=>{
+      bindCustomPlayer(origPlayer, 'origUI');
+      bindCustomPlayer(processedPlayer, 'processedUI');
+    });
+
+    // Crear curva de distorsión y render (funciones ya existentes)
+    function makeDistortionCurve(amount) {
+      const k = amount * 10;
+      const n_samples = 44100;
+      const curve = new Float32Array(n_samples);
+      const deg = Math.PI / 180;
+      for (let i = 0; i < n_samples; ++i) {
+        const x = i * 2 / n_samples - 1;
+        curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+      }
+      return curve;
+    }
 
     async function renderWithWaveshaper(inputBuffer, amount){
       const channels = inputBuffer.numberOfChannels;
       const sampleRate = inputBuffer.sampleRate;
       const length = inputBuffer.length;
-      // Offline context to render result deterministically
       const offlineCtx = new OfflineAudioContext(channels, length, sampleRate);
       const source = offlineCtx.createBufferSource();
       source.buffer = inputBuffer;
@@ -262,11 +375,9 @@
       waveshaper.curve = makeDistortionCurve(amount);
       waveshaper.oversample = '4x';
 
-      // Optional: add a subtle pre-gain and post-gain to control effect
       const preGain = offlineCtx.createGain();
       const postGain = offlineCtx.createGain();
 
-      // Scale pre-gain with amount so that higher saturation also drives more
       preGain.gain.value = 1 + (amount / 50);
       postGain.gain.value = 1;
 
@@ -280,12 +391,191 @@
       return rendered;
     }
 
-    // Utility: auto-load a tiny sample if no file selected (optional)
-    // You can remove this if you don't want a default audio.
-    (async ()=>{
-      // noop for now; leave empty to wait for user file
-    })();
+    // Convierte AudioBuffer a WAV (16-bit PCM)
+    function audioBufferToWav(buffer, opt) {
+      opt = opt || {}
+      const numChannels = buffer.numberOfChannels
+      const sampleRate = buffer.sampleRate
+      const format = 1 // PCM
+      const bitDepth = 16
 
+      let result;
+      if (numChannels === 2) {
+        const channelLeft = buffer.getChannelData(0)
+        const channelRight = buffer.getChannelData(1)
+        result = interleave(channelLeft, channelRight)
+      } else {
+        result = buffer.getChannelData(0)
+      }
+
+      const bytesPerSample = bitDepth / 8
+      const blockAlign = numChannels * bytesPerSample
+
+      const bufferLength = result.length * bytesPerSample
+      const wavBuffer = new ArrayBuffer(44 + bufferLength)
+      const view = new DataView(wavBuffer)
+
+      /* RIFF identifier */ writeString(view, 0, 'RIFF')
+      /* file length */ view.setUint32(4, 36 + bufferLength, true)
+      /* RIFF type */ writeString(view, 8, 'WAVE')
+      /* format chunk identifier */ writeString(view, 12, 'fmt ')
+      /* format chunk length */ view.setUint32(16, 16, true)
+      /* sample format (raw) */ view.setUint16(20, format, true)
+      /* channel count */ view.setUint16(22, numChannels, true)
+      /* sample rate */ view.setUint32(24, sampleRate, true)
+      /* byte rate (sampleRate * blockAlign) */ view.setUint32(28, sampleRate * blockAlign, true)
+      /* block align (channel count * bytes per sample) */ view.setUint16(32, blockAlign, true)
+      /* bits per sample */ view.setUint16(34, bitDepth, true)
+      /* data chunk identifier */ writeString(view, 36, 'data')
+      /* data chunk length */ view.setUint32(40, bufferLength, true)
+
+      // write PCM samples
+      floatTo16BitPCM(view, 44, result)
+
+      return new Blob([view], { type: 'audio/wav' })
+
+      function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i))
+        }
+      }
+
+      function interleave(left, right) {
+        const length = left.length + right.length
+        const result = new Float32Array(length)
+        let inputIndex = 0
+        for (let index = 0; index < left.length; index++) {
+          result[inputIndex++] = left[index]
+          result[inputIndex++] = right[index]
+        }
+        return result
+      }
+
+      function floatTo16BitPCM(output, offset, input) {
+        for (let i = 0; i < input.length; i++, offset += 2) {
+          let s = Math.max(-1, Math.min(1, input[i]))
+          s = s < 0 ? s * 0x8000 : s * 0x7FFF
+          output.setInt16(offset, s, true)
+        }
+      }
+    }
+
+    // Aplicar y procesar
+    applyBtn.addEventListener('click', async ()=>{
+      if (!audioBuffer){ setStatus('Primero carga un archivo de audio. INTELIGENTE'); return }
+      const amt = parseInt(level.value,10);
+      setStatus('Procesando audio (saturación ' + amt + ')...');
+      applyBtn.disabled = true;
+
+      try{
+        const renderedBuffer = await renderWithWaveshaper(audioBuffer, amt);
+        const wavBlob = audioBufferToWav(renderedBuffer);
+        if (processedBlobUrl) URL.revokeObjectURL(processedBlobUrl);
+        processedBlobUrl = URL.createObjectURL(wavBlob);
+        processedPlayer.src = processedBlobUrl;
+        processedPlayer.load();
+        downloadLink.href = processedBlobUrl;
+        downloadLink.style.display = 'inline-block';
+        if (mp3BlobUrl) { URL.revokeObjectURL(mp3BlobUrl); mp3BlobUrl = null; downloadMp3.style.display = 'none'; }
+        window._lastRenderedBuffer = renderedBuffer;
+        setStatus('Procesado listo — puedes reproducir o descargar no pongas esto en tus audifonos ☠.');
+      }catch(e){ console.error(e); setStatus('Error al procesar audio.'); }
+
+      applyBtn.disabled = false;
+    });
+
+    // Reproducir procesado usando el botón del UI
+    playProcessedBtn.addEventListener('click', ()=>{
+      const btn = document.querySelector('#processedUI .playbtn');
+      if (btn) btn.click();
+    });
+
+    // Convertir a MP3 (lamejs)
+    function audioBufferToMp3(buffer, kbps = 128){
+      if (typeof lamejs === 'undefined' && typeof window.lamejs === 'undefined') throw new Error('lamejs no disponible');
+      const mp3encoder = new lamejs.Mp3Encoder(buffer.numberOfChannels, buffer.sampleRate, kbps);
+      function floatTo16BitPCM(float32Array){
+        const l = float32Array.length;
+        const int16 = new Int16Array(l);
+        for (let i = 0; i < l; i++){
+          let s = Math.max(-1, Math.min(1, float32Array[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        return int16;
+      }
+
+      const left = floatTo16BitPCM(buffer.getChannelData(0));
+      let mp3Data = [];
+
+      if (buffer.numberOfChannels === 2){
+        const right = floatTo16BitPCM(buffer.getChannelData(1));
+        const maxSamples = 1152;
+        for (let i = 0; i < left.length; i += maxSamples){
+          const leftChunk = left.subarray(i, i + maxSamples);
+          const rightChunk = right.subarray(i, i + maxSamples);
+          const mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
+          if (mp3buf.length > 0) mp3Data.push(new Int8Array(mp3buf));
+        }
+      } else {
+        const maxSamples = 1152;
+        for (let i = 0; i < left.length; i += maxSamples){
+          const monoChunk = left.subarray(i, i + maxSamples);
+          const mp3buf = mp3encoder.encodeBuffer(monoChunk);
+          if (mp3buf.length > 0) mp3Data.push(new Int8Array(mp3buf));
+        }
+      }
+
+      const mp3buf = mp3encoder.flush();
+      if (mp3buf.length > 0) mp3Data.push(new Int8Array(mp3buf));
+
+      return new Blob(mp3Data, { type: 'audio/mp3' });
+    }
+
+    convertMp3Btn.addEventListener('click', async ()=>{
+      if (!window._lastRenderedBuffer){ setStatus('Primero genera el audio procesado (Aplicar saturación).'); return }
+      if (typeof lamejs === 'undefined' && typeof window.lamejs === 'undefined'){
+        setStatus('lamejs no cargado — intentando cargar por CDN...');
+        try{
+          await new Promise((res, rej)=>{
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.0/lame.min.js';
+            s.onload = res; s.onerror = rej; document.head.appendChild(s);
+          });
+        }catch(e){ setStatus('No se pudo cargar el codificador MP3.'); return }
+      }
+
+      setStatus('Convirtiendo a MP3 (esto puede tardar dependiendo del tamaño)...');
+      convertMp3Btn.disabled = true;
+      try{
+        const mp3Blob = audioBufferToMp3(window._lastRenderedBuffer, 128);
+        if (mp3BlobUrl) URL.revokeObjectURL(mp3BlobUrl);
+        mp3BlobUrl = URL.createObjectURL(mp3Blob);
+        downloadMp3.href = mp3BlobUrl;
+        downloadMp3.style.display = 'inline-block';
+        setStatus('MP3 listo para descargar.');
+      }catch(e){ console.error(e); setStatus('Error al convertir a MP3: ' + (e && e.message)); }
+      convertMp3Btn.disabled = false;
+    });
+
+    // Bind players when sources change (so UI updates when new src is set)
+    function refreshBindings(){
+      // Re-bind to ensure listeners are attached to current audio elements
+      bindCustomPlayer(origPlayer, 'origUI');
+      bindCustomPlayer(processedPlayer, 'processedUI');
+    }
+
+    // When processed src changes, ensure UI knows duration etc (small delay)
+    processedPlayer.addEventListener('loadeddata', ()=>{ setTimeout(()=>{ try{ const ev = new Event('loadedmetadata'); processedPlayer.dispatchEvent(ev); }catch(e){} },200) });
+    origPlayer.addEventListener('loadeddata', ()=>{ setTimeout(()=>{ try{ const ev = new Event('loadedmetadata'); origPlayer.dispatchEvent(ev); }catch(e){} },200) });
+
+    // Initial bind
+    bindCustomPlayer(origPlayer, 'origUI');
+    bindCustomPlayer(processedPlayer, 'processedUI');
+
+    // Utility: auto-load a tiny sample if no file selected (optional)
+    (async ()=>{
+      // noop for now; wait for user file
+    })();
   </script>
 </body>
 </html>
